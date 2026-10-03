@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <title>Pixel Logistics Tycoon - Advanced</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+    
+    body {
+      margin: 0;
+      padding: 10px;
+      background-color: #0c0a12;
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    
+    #game-container {
+      width: 660px;
+      background: #1c1424;
+      border: 4px solid #4a2e56;
+      box-shadow: 0 0 25px rgba(0,0,0,0.9);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      background: #0d0914;
+      padding: 10px;
+      border: 2px solid #3c244d;
+      font-size: 9px;
+      color: #7be139;
+    }
+    
+    .hud-val {
+      color: #fff;
+    }
+    
+    #viewport {
+      width: 632px;
+      height: 260px;
+      background: #000;
+      border: 3px solid #3c244d;
+      image-rendering: pixelated;
+      position: relative;
+    }
+    
+    canvas {
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      display: block;
+    }
+    
+    .panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    
+    .box {
+      background: #0d0914;
+      border: 2px solid #3c244d;
+      padding: 8px;
+      font-size: 8px;
+      line-height: 1.4;
+    }
+    
+    .box h3 {
+      font-size: 9px;
+      margin: 0 0 8px 0;
+      color: #f77622;
+      border-bottom: 2px solid #3c244d;
+      padding-bottom: 4px;
+    }
+    
+    .shipping-selector {
+      display: flex;
+      gap: 6px;
+      margin: 6px 0;
+    }
+    
+    .mode-btn {
+      flex: 1;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 6px 2px;
+      background: #251833;
+      color: #aaa;
+      border: 2px solid #3c244d;
+      cursor: pointer;
+      text-align: center;
+    }
+    
+    .mode-btn.active {
+      background: #5a3d5c;
+      color: #f77622;
+      border-color: #f77622;
+    }
+    
+    .btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      padding: 6px 8px;
+      background: #3c244d;
+      color: #fff;
+      border: 2px solid #5a3d5c;
+      cursor: pointer;
+      margin-top: 4px;
+      width: 100%;
+      text-align: center;
+    }
+    
+    .btn:hover {
+      background: #5a3d5c;
+    }
+    
+    .btn:active {
+      background: #f77622;
+      color: #000;
+    }
+    
+    #log {
+      height: 55px;
+      overflow-y: auto;
+      font-size: 7px;
+      color: #9cb43f;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+    
+    .log-item {
+      margin-bottom: 3px;
+    }
+    
+    .log-warn {
+      color: #fe2834;
+    }
+    
+    .log-success {
+      color: #7be139;
+    }
+    
+    .log-info {
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div class="hud">
+      <div>DAG: <span id="hud-day" class="hud-val">1</span></div>
+      <div>KAPITAL: <span id="hud-money" class="hud-val">1200</span> kr</div>
+      <div>LAGER: <span id="hud-stock" class="hud-val">25</span> / 100</div>
+    </div>
+    
+    <div id="viewport">
+      <canvas id="gameCanvas" width="316" height="130"></canvas>
+    </div>
+    
+    <div class="panel">
+      <div class="box">
+        <h3>INKÖP & TRANSPORT</h3>
+        <div>Välj fraktsätt:</div>
+        <div class="shipping-selector">
+          <div id="btn-sea" class="mode-btn active" onclick="setMode('sea')">🚢 SJÖ<br><span style="font-size:5px;">4 dgr | 40kr</span></div>
+          <div id="btn-air" class="mode-btn" onclick="setMode('air')">✈️ FLYG<br><span style="font-size:5px;">1 dag | 150kr</span></div>
+        </div>
+        
+        <div style="margin-top:4px;">Inköpspris: 10 kr/st</div>
+        <div style="margin-top:2px;">Orderstorlek:</div>
+        <div style="display: flex; gap: 4px; align-items:center; margin-top:3px;">
+          <button class="btn" style="width:30px;" onclick="adjustOrder(-5)">-5</button>
+          <span id="order-qty" style="padding: 4px 8px; color:#f77622;">20</span>
+          <button class="btn" style="width:30px;" onclick="adjustOrder(5)">+5</button>
+          <span id="calc-cost" style="font-size:6px; color:#aaa; margin-left:auto;">Tot: 240 kr</span>
+        </div>
+        <button id="buy-btn" class="btn" onclick="placeOrder()" style="margin-top:6px; background:#4f3267;">BESTÄLL FREIGHT</button>
+      </div>
+      
+      <div class="box">
+        <h3>MARKNAD & LAGER</h3>
+        <div>Försäljningspris: <span style="color:#7be139;">28 kr</span></div>
+        <div>Lagerhyra: <span style="color:#fe2834;">1 kr/st/dag</span></div>
+        <div style="margin-top:4px;">Aktiva ordrar i transit: <span id="in-transit" class="hud-val">0</span></div>
+        <br>
+        <button class="btn" onclick="nextDay()" style="background:#0e692f; border-color:#20a24d; padding:10px;">NÄSTA DAG ▶</button>
+      </div>
+    </div>
+    
+    <div class="box">
+      <h3>LOGISTIK & LEVERANSKEDJA LOGG</h3>
+      <div id="log">
+        <div class="log-item">Välkommen! Välj mellan billig Sjöfrakt (4 dgr) eller snabb Flygfrakt (1 dag). Se upp för förseningar!</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let day = 1;
+    let money = 1200;
+    let stock = 25;
+    const maxStock = 100;
+    let orderQty = 20;
+    let unitCost = 10;
+    let sellPrice = 28;
+    let holdingCostPerUnit = 1;
+    
+    let currentMode = 'sea';
+    const modeConfig = {
+      sea: { name: 'Sjöfrakt', leadTime: 4, fee: 40, icon: '🚢' },
+      air: { name: 'Flygfrakt', leadTime: 1, fee: 150, icon: '✈️' }
+    };
+    
+    let ordersInTransit = [];
+    let orderCounter = 1;
+    
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('btn-sea').classList.toggle('active', mode === 'sea');
+      document.getElementById('btn-air').classList.toggle('active', mode === 'air');
+      updateCostDisplay();
+    }
+    
+    function adjustOrder(delta) {
+      orderQty = Math.max(5, Math.min(100, orderQty + delta));
+      document.getElementById('order-qty').innerText = orderQty;
+      updateCostDisplay();
+    }
+    
+    function updateCostDisplay() {
+      const cfg = modeConfig[currentMode];
+      const total = (orderQty * unitCost) + cfg.fee;
+      document.getElementById('calc-cost').innerText = `Tot: ${total} kr`;
+    }
+    
+    function addLog(msg, type = '') {
+      const log = document.getElementById('log');
+      const item = document.createElement('div');
+      item.className = 'log-item ' + (type ? 'log-' + type : '');
+      item.innerText = `[Dag ${day}] ${msg}`;
+      log.appendChild(item);
+    }
+    
+    function updateHUD() {
+      document.getElementById('hud-day').innerText = day;
+      document.getElementById('hud-money').innerText = money;
+      document.getElementById('hud-stock').innerText = stock;
+      
+      const totalTransit = ordersInTransit.reduce((acc, o) => acc + o.qty, 0);
+      document.getElementById('in-transit').innerText = `${ordersInTransit.length} st (${totalTransit} varor)`;
+      
+      drawPixelArt();
+    }
+    
+    function drawPixelArt() {
+      ctx.fillStyle = '#140e1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.strokeStyle = '#23182d';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 16) {
+        for (let y = 25; y < canvas.height; y += 16) {
+          ctx.strokeRect(x, y, 16, 16);
+        }
+      }
+      
+      ctx.fillStyle = '#0f2a4a';
+      ctx.fillRect(0, 0, 65, canvas.height);
+      ctx.fillStyle = '#1e4d7b';
+      ctx.fillRect(60, 0, 5, canvas.height);
+      
+      ctx.fillStyle = '#1a2238';
+      ctx.fillRect(65, 0, canvas.width - 65, 25);
+      
+      ctx.fillStyle = '#3a253c';
+      ctx.fillRect(90, 45, 130, 8);
+      ctx.fillRect(90, 80, 130, 8);
+      ctx.fillRect(90, 115, 130, 8);
+      
+      const boxesCount = Math.min(Math.floor(stock / 2), 36);
+      for (let i = 0; i < boxesCount; i++) {
+        const row = Math.floor(i / 12);
+        const col = i % 12;
+        const bx = 92 + col * 10;
+        const by = 36 + row * 35;
+        
+        ctx.fillStyle = '#b86f32';
+        ctx.fillRect(bx, by, 8, 8);
+        ctx.fillStyle = '#d98a43';
+        ctx.fillRect(bx + 1, by + 1, 6, 6);
+      }
+      
+      ordersInTransit.forEach(order => {
+        if (order.mode === 'sea') {
+          const progress = 1 - (order.daysLeft / order.originalDays);
+          const sy = Math.min(100, Math.max(10, progress * 90));
+          
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(10, sy, 40, 15);
+          ctx.fillStyle = '#fe2834';
+          ctx.fillRect(20, sy - 8, 20, 8);
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = '5px sans-serif';
+          ctx.fillText(`${order.daysLeft}d`, 15, sy + 11);
+        } else if (order.mode === 'air') {
+          const progress = 1 - (order.daysLeft / order.originalDays);
+          const px = 70 + (progress * 160);
+          
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(px, 8, 24, 6);
+          ctx.fillRect(px + 8, 4, 6, 14);
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = '5px sans-serif';
+          ctx.fillText(`${order.daysLeft}d`, px + 2, 22);
+        }
+      });
+      
+      ctx.fillStyle = '#0d0914';
+      ctx.fillRect(250, 25, 66, 105);
+      ctx.fillStyle = '#f77622';
+      ctx.fillRect(250, 25, 2, 105);
+      
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '5px "Press Start 2P"';
+      ctx.fillText('HAMN', 15, 12);
+      ctx.fillText('FLYGLEVERANS', 120, 15);
+      ctx.fillStyle = '#7be139';
+      ctx.fillText('LAGER', 90, 32);
+      ctx.fillText('UTLEVERANS', 254, 38);
+    }
+    
+    function placeOrder() {
+      const cfg = modeConfig[currentMode];
+      const totalCost = (orderQty * unitCost) + cfg.fee;
+      
+      if (money < totalCost) {
+        addLog('Inte tillräckligt med kapital för ordern!', 'warn');
+        return;
+      }
+      
+      money -= totalCost;
+      ordersInTransit.push({
+        id: orderCounter++,
+        mode: currentMode,
+        qty: orderQty,
+        daysLeft: cfg.leadTime,
+        originalDays: cfg.leadTime
+      });
+      
+      addLog(`${cfg.icon} ${cfg.name} lagd: ${orderQty} st. Kostnad: ${totalCost} kr (${cfg.leadTime} dgr).`, 'info');
+      updateHUD();
+    }
+    
+    function nextDay() {
+      day++;
+      
+      if (ordersInTransit.length > 0 && Math.random() < 0.18) {
+        const delayedOrder = ordersInTransit[Math.floor(Math.random() * ordersInTransit.length)];
+        delayedOrder.daysLeft += 1;
+        delayedOrder.originalDays += 1;
+        
+        if (delayedOrder.mode === 'sea') {
+          addLog(`⚠️ STORM I HAMNEN! Sjöfrakt försenad +1 dag.`, 'warn');
+        } else {
+          addLog(`⚠️ TULLKONTROLL! Flygfrakt försenad +1 dag.`, 'warn');
+        }
+      }
+      
+      let arrivedQty = 0;
+      for (let i = ordersInTransit.length - 1; i >= 0; i--) {
+        ordersInTransit[i].daysLeft--;
+        if (ordersInTransit[i].daysLeft <= 0) {
+          arrivedQty += ordersInTransit[i].qty;
+          ordersInTransit.splice(i, 1);
+        }
+      }
+      
+      if (arrivedQty > 0) {
+        stock += arrivedQty;
+        addLog(`📦 Leverans anländ! +${arrivedQty} st till lagret.`, 'success');
+        if (stock > maxStock) {
+          const lost = stock - maxStock;
+          stock = maxStock;
+          addLog(`Lager fullt! ${lost} st skrotades (Överlager).`, 'warn');
+        }
+      }
+      
+      const demand = Math.floor(Math.random() * 13) + 6;
+      const sold = Math.min(stock, demand);
+      const missed = demand - sold;
+      
+      stock -= sold;
+      const revenue = sold * sellPrice;
+      money += revenue;
+      
+      if (sold > 0) {
+        addLog(`Sålde ${sold} st för ${revenue} kr.`);
+      }
+      if (missed > 0) {
+        addLog(`🚨 BRIST! Kunde inte leverera ${missed} st till kund!`, 'warn');
+      }
+      
+      const holdingCost = stock * holdingCostPerUnit;
+      money -= holdingCost;
+      if (holdingCost > 0) {
+        addLog(`Lagerhyra/bindning: -${holdingCost} kr.`, 'warn');
+      }
+      
+      updateHUD();
+    }
+    
+    updateCostDisplay();
+    updateHUD();
+  </script>
+</body>
+</html>
